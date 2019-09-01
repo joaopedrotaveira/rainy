@@ -1,6 +1,7 @@
 # rainy - a tiny tool for iot data collection and monitoring
 rainy is a tiny tool for IoT data collection and monitoring.
-rainy supports [TI SensorTag CC2650](http://processors.wiki.ti.com/index.php/CC2650_SensorTag_User's_Guide) and [MH-Z19B](https://www.winsen-sensor.com/d/files/infrared-gas-sensor/mh-z19b-co2-ver1_0.pdf) as IoT devices, communicates with CC2650 by [bluez-dbus](https://github.com/hypfvieh/bluez-dbus), and communicates with MH-Z19B by [jSerialComm](https://github.com/Fazecast/jSerialComm), and acquires each data.
+rainy supports [TI SensorTag CC2650](http://processors.wiki.ti.com/index.php/CC2650_SensorTag_User's_Guide), [MH-Z19B](https://www.winsen-sensor.com/d/files/infrared-gas-sensor/mh-z19b-co2-ver1_0.pdf) and [PPD42NS](http://wiki.seeedstudio.com/Grove-Dust_Sensor/) as IoT devices, communicates with CC2650 by [bluez-dbus](https://github.com/hypfvieh/bluez-dbus), and communicates with MH-Z19B by [jSerialComm](https://github.com/Fazecast/jSerialComm),
+and communicates with PPD42NS by [Pi4J](https://pi4j.com/) and acquires each data.
 And it corresponds to OPC-UA which is a protocol of industrial automation.
 I use [Eclipse Milo](https://github.com/eclipse/milo) for the OPC-UA Protocol Stack and SDK (Java).
 These data can be sent to [InfluxDB](https://www.influxdata.com/) (Time Series Database) for visualization, or sent to MQTT Broker to be used as a data source for any other purposes.
@@ -15,6 +16,14 @@ I have confirmed that it works in Raspberry Pi 3B ([Raspbian Buster Lite OS](htt
 The following figure is overview of rainy.
 
 <img src="./images/rainy_overview_0.png" title="./images/rainy_overview_0.png" width=800px></img>
+
+The following figure is overview which the monitoring is running together with rainy on same Raspberry Pi 3B.
+
+<img src="./images/rainy_overview_2.png" title="./images/rainy_overview_2.png" width=800px></img>
+
+The following image shows the hardware configuration.
+
+<img src="./images/rainy_hardware_0.png" title="./images/rainy_hardware_0.png" width=600px></img>
 
 ---
 <h2>Table of Contents</h2>
@@ -40,8 +49,9 @@ The following figure is overview of rainy.
   - [Setting sensors](#setting_sensors)
     - [CC2650 - cc2650.properties](#cc2650_properties)
     - [MH-Z19B - mhz19b.properties](#mhz19b_properties)
+    - [PPD42NS - ppd42ns.properties](#ppd42ns_properties)
     - [OPC-UA - opcua.properties](#opcua_properties)
-      - [OPC-UA server - conf/opcua/milo-example.properties](#opcua_server_properties)
+      - [OPC-UA server - conf/opcua/milo-public-demo.properties](#opcua_server_properties)
 - [Run rainy](#run_rainy)
   - [Output sensor values to the log file](#output_sensor_value)
   - [Check the database name for each device created in InfluxDB](#check_database)
@@ -67,8 +77,9 @@ Although I think the functionality and performance of this tool are not sufficie
 
 <h2 id="setup_os">Setup OS</h2>
 
-Please refer to [here](https://github.com/s5uishida/mh-z19b-driver) for setting RaspberryPi 3B as an environment for running rainy.
-Both Bluetooth and serial communication can be enabled.
+Please refer to [here1](https://github.com/s5uishida/mh-z19b-driver) and
+[here2](https://github.com/s5uishida/ppd42ns-driver) for setting RaspberryPi 3B as an environment for running rainy.
+Both Bluetooth and serial communication / GPIO can be enabled.
 
 <h2 id="setup_sending_data">Setup sending data</h2>
 
@@ -79,8 +90,15 @@ rainy supports InfluxDB and MQTT broker as sending data.
 I am using [InfluxDB](https://www.influxdata.com/) on Ubuntu 18.04.
 The installation is as follows from [here](https://portal.influxdata.com/downloads/).
 ```
-# wget https://dl.influxdata.com/influxdb/releases/influxdb_1.7.7_amd64.deb
-# dpkg -i influxdb_1.7.7_amd64.deb
+# wget https://dl.influxdata.com/influxdb/releases/influxdb_1.7.8_amd64.deb
+# dpkg -i influxdb_1.7.8_amd64.deb
+# systemctl enable influxdb.service
+# systemctl start influxdb.service
+```
+In addition, the step to install InfluxDB on Raspberry Pi 3B is as follows.
+```
+# wget https://dl.influxdata.com/influxdb/releases/influxdb_1.7.8_armhf.deb
+# dpkg -i influxdb_1.7.8_armhf.deb
 # systemctl enable influxdb.service
 # systemctl start influxdb.service
 ```
@@ -96,6 +114,7 @@ The installation is as follows.
 # systemctl enable mosquitto.service
 # systemctl start mosquitto.service
 ```
+In addition, the step to install Mosquitto on Raspberry Pi 3B is the same as above.
 
 <h2 id="install_visualization">Setup visualization tools</h2>
 
@@ -103,8 +122,15 @@ The installation is as follows.
 
 I am using [Grafana](https://grafana.com/) on Ubuntu 18.04. The installation is as follows from [here](https://grafana.com/grafana/download?platform=linux).
 ```
-# wget https://dl.grafana.com/oss/release/grafana_6.2.5_amd64.deb
-# dpkg -i grafana_6.2.5_amd64.deb
+# wget https://dl.grafana.com/oss/release/grafana_6.3.4_amd64.deb
+# dpkg -i grafana_6.3.4_amd64.deb
+# systemctl enable grafana-server.service
+# systemctl start grafana-server.service
+```
+In addition, the step to install Grafana on Raspberry Pi 3B is as follows.
+```
+# wget https://dl.grafana.com/oss/release/grafana_6.3.4_armhf.deb
+# dpkg -i grafana_6.3.4_armhf.deb
 # systemctl enable grafana-server.service
 # systemctl start grafana-server.service
 ```
@@ -113,8 +139,15 @@ I am using [Grafana](https://grafana.com/) on Ubuntu 18.04. The installation is 
 
 I am using [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/) on Ubuntu 18.04. The installation is as follows from [here](https://portal.influxdata.com/downloads/).
 ```
-# wget https://dl.influxdata.com/chronograf/releases/chronograf_1.7.12_amd64.deb
-# dpkg -i chronograf_1.7.12_amd64.deb
+# wget https://dl.influxdata.com/chronograf/releases/chronograf_1.7.14_amd64.deb
+# dpkg -i chronograf_1.7.14_amd64.deb
+# systemctl enable chronograf.service
+# systemctl start chronograf.service
+```
+In addition, the step to install Chronograf on Raspberry Pi 3B is as follows.
+```
+# wget https://dl.influxdata.com/chronograf/releases/chronograf_1.7.14_armhf.deb
+# dpkg -i chronograf_1.7.14_armhf.deb
 # systemctl enable chronograf.service
 # systemctl start chronograf.service
 ```
@@ -193,11 +226,14 @@ TLS_PRIVATE_KEY=/etc/rainy/cert.key
 - **`clientID`**  
   Set a unique client identifier for running rainy.
 - **`cc2650`**  
-  Set to true when using CC2650. default is `false`.
+  Set to `true` when using CC2650. default is `false`.
 - **`mhz19b`**  
-  Set to true when using MH-Z19B. default is `false`.
+  Set to `true` when using MH-Z19B. default is `false`.
+- **`ppd42ns`**  
+  Set to `true` when using PPD42NS. default is `false`.  
+  **Note. This tool uses Pi4J for PPD42NS, so PPD42NS can only be used with Raspberry Pi series (arm). Therefore, the PPD42NS feature of this tool does not work on amd64 Linux machines, so set it to `false` on amd64 Linux machines.**  
 - **`opcua`**  
-  Set to true when using OPC-UA. default is `false`.
+  Set to `true` when using OPC-UA. default is `false`.
 
 <h3 id="setting_connection_sending_data">Setting the connection for sending data</h3>
   
@@ -211,7 +247,7 @@ TLS_PRIVATE_KEY=/etc/rainy/cert.key
 - `flushDuration`  
   Set the time to wait at most (msec). default is `1000`.
 - `dataOnly`  
-  Set to true when collecting only data. default is `true`.
+  Set to `true` when collecting only data. default is `true`.
 
 <h4 id="mqtt_properties">MQTT - mqtt.properties</h4>
 
@@ -253,11 +289,11 @@ hci0:   Type: Primary  Bus: UART
         Manufacturer: Broadcom Corporation (15)
 ```
 - **`influxDB`**  
-  Set to true when sending data to InfluxDB. default is `false`.
+  Set to `true` when sending data to InfluxDB. default is `false`.
 - **`mqtt`**  
-  Set to true when sending data to MQTT broker. default is `false`.
+  Set to `true` when sending data to MQTT broker. default is `false`.
 - `prettyPrinting`  
-  Set to true when indenting the log output of JSON format data. default is `false`.
+  Set to `true` when indenting the log output of JSON format data. default is `false`.
   It is also necessary to change the following log level of `conf/logging.properties`.  
   ```
   #io.github.s5uishida.level=INFO
@@ -267,27 +303,27 @@ hci0:   Type: Primary  Bus: UART
 - `readCrontab`  
   Set the schedule for sensing data in crontab format. default is every minute.
 - `batteryLevel`  
-  Set to true when getting battery level. default is `false`.
+  Set to `true` when getting battery level. default is `false`.
 - Example of setting Temperature sensor
   - **`temperature`**  
-    Set to true when using a Temperature sensor. default is `false`.
+    Set to `true` when using a Temperature sensor. default is `false`.
   - `temperatureNotify`  
-    Set to true when using the notification function. default is `false`. When the notification function is enabled, the readCrontab schedule for Temperature sensor is disabled.
+    Set to `true` when using the notification function. default is `false`. When the notification function is enabled, the readCrontab schedule for Temperature sensor is disabled.
   - `temperatureNotificationPeriod`  
     Set the notification time interval in milliseconds. default is `1000`.
 - Movement
   - `gyroscope`  
-    Set to true when using a Gyroscope sensor. default is `false`.
+    Set to `true` when using a Gyroscope sensor. default is `false`.
   - `accelerometer`  
-    Set to true when using a Accelerometer sensor. default is `false`.
+    Set to `true` when using a Accelerometer sensor. default is `false`.
   - `magnetometer`  
-    Set to true when using a Magnetometer sensor. default is `false`.
+    Set to `true` when using a Magnetometer sensor. default is `false`.
   - `movementNotify`  
-    Set to true when using the notification function. default is `false`. When the notification function is enabled, the readCrontab schedule for Movement sensor is disabled.
+    Set to `true` when using the notification function. default is `false`. When the notification function is enabled, the readCrontab schedule for Movement sensor is disabled.
   - `movementNotificationPeriod`  
     Set the notification time interval in milliseconds. default is `1000`.
   - `wakeOnMotion`  
-    Set to true when sending movement data when a shake is detected. It sends `Movement` data at a time interval specified by notification for 10 seconds. default is `false`.
+    Set to `true` when sending movement data when a shake is detected. It sends `Movement` data at a time interval specified by notification for 10 seconds. default is `false`.
   - `accelerometerRange`  
     Set Accelerometer range. default is `2`.
 - **`devices`**  
@@ -302,14 +338,34 @@ After launching `hcitool` command, press the power button of CC2650 and the scan
 
 <h4 id="mhz19b_properties">MH-Z19B - mhz19b.properties</h4>
 
+When using PPD42NS, use GPIO of Raspberry Pi 3B for PPD42NS.
+Please use **DSD TECH SH-U09C USB to TTL Serial Adapter with FTDI FT232RL Chip** etc for serial communication of MH-Z19B.
+In that case, you should specify `/dev/ttyUSB0` for the port name.
 - **`portName`**  
   Set the serial port name. default is `/dev/ttyAMA0`.
 - **`influxDB`**  
-  Set to true when sending data to InfluxDB. default is `false`.
+  Set to `true` when sending data to InfluxDB. default is `false`.
 - **`mqtt`**  
-  Set to true when sending data to MQTT broker. default is `false`.
+  Set to `true` when sending data to MQTT broker. default is `false`.
 - `prettyPrinting`  
-  Set to true when indenting the log output of JSON format data. default is `false`.
+  Set to `true` when indenting the log output of JSON format data. default is `false`.
+  It is also necessary to change the following log level of `conf/logging.properties`.  
+  ```
+  #io.github.s5uishida.level=INFO
+  -->
+  io.github.s5uishida.level=FINE
+  ```
+- `readCrontab`  
+  Set the schedule for sensing data in crontab format. default is every minute.
+
+<h4 id="ppd42ns_properties">PPD42NS - ppd42ns.properties</h4>
+
+- **`influxDB`**  
+  Set to `true` when sending data to InfluxDB. default is `false`.
+- **`mqtt`**  
+  Set to `true` when sending data to MQTT broker. default is `false`.
+- `prettyPrinting`  
+  Set to `true` when indenting the log output of JSON format data. default is `false`.
   It is also necessary to change the following log level of `conf/logging.properties`.  
   ```
   #io.github.s5uishida.level=INFO
@@ -322,11 +378,11 @@ After launching `hcitool` command, press the power button of CC2650 and the scan
 <h4 id="opcua_properties">OPC-UA - opcua.properties</h4>
 
 - **`influxDB`**  
-  Set to true when sending data to InfluxDB. default is `false`.
+  Set to `true` when sending data to InfluxDB. default is `false`.
 - **`mqtt`**  
-  Set to true when sending data to MQTT broker. default is `false`.
+  Set to `true` when sending data to MQTT broker. default is `false`.
 - `prettyPrinting`  
-  Set to true when indenting the log output of JSON format data. default is `false`.
+  Set to `true` when indenting the log output of JSON format data. default is `false`.
   It is also necessary to change the following log level of `conf/logging.properties`.  
   ```
   #io.github.s5uishida.level=INFO
@@ -338,11 +394,11 @@ After launching `hcitool` command, press the power button of CC2650 and the scan
 - `keyStorePassword`
 - `certificate`
 
-<h5 id="opcua_server_properties">OPC-UA server - conf/opcua/milo-example.properties</h5>
+<h5 id="opcua_server_properties">OPC-UA server - conf/opcua/milo-public-demo.properties</h5>
 
 The following is an example of [Public Demo Server of Eclipse Milo](https://github.com/eclipse/milo).
 - **`use`**  
-  Set to true to use this server. default is `false`.
+  Set to `true` to use this server. default is `false`.
 - **`serverName`**  
   Set the OPC-UA server name.
 - **`endpointIP`**  
@@ -382,16 +438,19 @@ The following is an example of [Public Demo Server of Eclipse Milo](https://gith
 	  2,Dynamic,-1 \
 	  0,2295,-1
   ```
-  In the above example, specify `2,Dynamic/RandomInt32` and `2,Dynamic/RandomInt64` uniquely, and search for the NodeID to be monitored from `2,Dynamic` and `0,2295`(VendorServerInfo) at an infinite depth. In this case, only `2,Dynamic,-1` and `0,2295,-1` should be specified, but I wrote it for explanation of the format.  
+  In the above example, specify `2,Dynamic/RandomInt32` and `2,Dynamic/RandomInt64` uniquely, and search for the NodeID to be monitored from `2,Dynamic` and `0,2295`(VendorServerInfo) at an infinite depth. In this case, only `2,Dynamic,-1` and `0,2295,-1` should be specified, but I wrote it for explanation of the format.
+
+`conf/opcua` also contains a `milo-example.properties` file.
+This is an example server-properties file of connecting to the server ([milo-example-server](https://github.com/s5uishida/milo-example-server)) where the Milo sample server code is built almost as it is.
   
-For reference, there is [toem impulse (Eclipse pulug-in)](https://toem.de/index.php/projects/impulse) as a tool for easily checking the address space of OPC-UA server.
+For reference, there is [toem impulse OPC/UA Extension (Eclipse pulug-in)](https://toem.de/index.php/projects/impulse-opcua) as a tool for easily checking the address space of OPC-UA server.
 
 <h2 id="run_rainy">Run rainy</h2>
 
 - start  
   Start rainy as follows.
 ```
-# cd /path/to/rainy/bin
+# cd /path/to/rainy-felix/bin
 # sh rainy-start.sh
 WARNING: An illegal reflective access operation has occurred
 WARNING: Illegal reflective access by org.apache.felix.framework.ext.ClassPathExtenderFactory$DefaultClassLoaderExtender (file:/path/to/rainy-felix/bin/felix.jar) to method java.net.URLClassLoader.addURL(java.net.URL)
@@ -406,8 +465,8 @@ START LEVEL 1
 [   2] [Active     ] [    1] bcprov (1.62)
 [   3] [Active     ] [    1] bluetooth scanner (0.1.1)
 [   4] [Active     ] [    1] bluez-dbus-osgi (0.1.2.201908052042)
-[   5] [Active     ] [    1] bsd-parser-core-osgi (0.3.2)
-[   6] [Active     ] [    1] bsd-parser-gson-osgi (0.3.2)
+[   5] [Active     ] [    1] bsd-parser-core (0.3.3)
+[   6] [Active     ] [    1] bsd-parser-gson (0.3.3)
 [   7] [Active     ] [    1] java driver for ti sensortag cc2650 (0.1.0)
 [   8] [Active     ] [    1] Apache Commons Lang (3.9.0)
 [   9] [Active     ] [    1] cron4j-osgi (2.2.5)
@@ -441,16 +500,18 @@ START LEVEL 1
 [  37] [Active     ] [    1] Apache ServiceMix :: Bundles :: retrofit (2.5.0.2)
 [  38] [Active     ] [    1] Paho MQTT Client (1.2.1)
 [  39] [Active     ] [    1] OSGi LogService implemented over SLF4J (1.7.26)
-[  40] [Active     ] [    1] osgi activator of rainy - a tiny tool for iot data collection and monitoring (0.1.3)
-[  41] [Active     ] [    1] OPC-UA bundle of rainy - a tiny tool for iot data collection and monitoring (0.1.4)
-[  42] [Active     ] [    1] rainy - a tiny tool for iot data collection and monitoring (0.1.7)
-[  43] [Active     ] [    1] sdk-client-osgi (0.3.2)
-[  44] [Active     ] [    1] sdk-core-osgi (0.3.2)
-[  45] [Active     ] [    1] slf4j-api (1.7.26)
-[  46] [Resolved   ] [    1] slf4j-jdk14 (1.7.26)
-[  47] [Active     ] [    1] stack-client-osgi (0.3.2)
-[  48] [Active     ] [    1] stack-core-osgi (0.3.2)
-[  49] [Active     ] [    1] strict-machine-osgi (0.1.0)
+[  40] [Active     ] [    1] Pi4J :: Java Library (Core) (1.2)
+[  41] [Active     ] [    1] java driver for ppd42ns - dust sensor module (0.1.1)
+[  42] [Active     ] [    1] osgi activator of rainy - a tiny tool for iot data collection and monitoring (0.1.6)
+[  43] [Active     ] [    1] OPC-UA bundle of rainy - a tiny tool for iot data collection and monitoring (0.1.4)
+[  44] [Active     ] [    1] rainy - a tiny tool for iot data collection and monitoring (0.1.10)
+[  45] [Active     ] [    1] sdk-client (0.3.3)
+[  46] [Active     ] [    1] sdk-core (0.3.3)
+[  47] [Active     ] [    1] slf4j-api (1.7.26)
+[  48] [Resolved   ] [    1] slf4j-jdk14 (1.7.26)
+[  49] [Active     ] [    1] stack-client (0.3.3)
+[  50] [Active     ] [    1] stack-core (0.3.3)
+[  51] [Active     ] [    1] strict-machine-osgi (0.1.0)
 -> 
 ```
 
@@ -470,7 +531,7 @@ io.github.s5uishida.level=FINE
 ```
 The sample of the output log is as follows.
 ```
-[/dev/ttyAMA0] co2:850 
+[/dev/ttyUSB0] co2:850 
 [hci0] B0:B4:48:B9:92:86 obj:28.28125 amb:32.28125 
 [hci0] B0:B4:48:B9:92:86 humidity:59.362793 
 [hci0] B0:B4:48:B9:92:86 pressure:1012.27 
@@ -484,20 +545,23 @@ The sample of the output log is as follows.
 [hci0] B0:B4:48:B9:92:86 mag[x]:127.0 
 [hci0] B0:B4:48:B9:92:86 mag[y]:420.0 
 [hci0] B0:B4:48:B9:92:86 mag[z]:302.0
+[GPIO_14] pcs:1373.6702 ugm3:2.1420693
 ```
 In order to reduce writing to the SD card, it is usually recommended to set it to `INFO`.
 
 <h3 id="check_database">Check the database name for each device created in InfluxDB</h3>
 
-Check from the log file `logs/rainy.log.0`. In the following example, databases `RP3B_01__dev_ttyAMA0` for MH-Z19B, `B0_B4_48_B9_92_86` and `B0_B4_48_ED_B6_04` for CC2650 and `milo_digitalpetri_com_62541_milo` for Public Demo Server of Eclipse Milo were created. Note that InfluxDB will not do anything if the database already exists.
+Check from the log file `logs/rainy.log.0`. In the following example, databases `RP3B_01__dev_ttyUSB0` for MH-Z19B, `B0_B4_48_B9_92_86` and `B0_B4_48_ED_B6_04` for CC2650, `milo_digitalpetri_com_62541_milo` for Public Demo Server of Eclipse Milo and `RP3B_01_GPIO_14` for PPD42NS were created. Note that InfluxDB will not do anything if the database already exists.
 ```
-execute - CREATE DATABASE RP3B_01__dev_ttyAMA0
+execute - CREATE DATABASE RP3B_01__dev_ttyUSB0
 ...
 execute - CREATE DATABASE B0_B4_48_B9_92_86
 ...
 execute - CREATE DATABASE B0_B4_48_ED_B6_04
 ...
 execute - CREATE DATABASE milo_digitalpetri_com_62541_milo
+...
+execute - CREATE DATABASE RP3B_01_GPIO_14
 ```
 These database names are required for the visualization tools Grafana and Chronograf to connect to InfluxDB.
 
@@ -510,14 +574,22 @@ Visualization tools can be connected to InfluxDB to monitor time-series sensor d
 Please refer to Getting started of [Grafana site](https://grafana.com/docs/) for how to use Grafana.  
 The following figure is a sample image of a dashboard.
 
-<img src="./images/rainy_grafana_0.png" title="./images/rainy_grafana_0.png" width=800px></img>
+<img src="./images/rainy_grafana_1.png" title="./images/rainy_grafana_1.png" width=800px></img>
+
+The following figure is a sample graph of Magnetometer using [Plotly](https://grafana.com/grafana/plugins/natel-plotly-panel) panel.
+
+<img src="./images/rainy_grafana_1_1.png" title="./images/rainy_grafana_1_1.png" width=800px></img>
+
+The following figure is a sample monitoring image with environmental information on the floor map using [ImageIt](https://grafana.com/grafana/plugins/pierosavi-imageit-panel) panel.
+
+<img src="./images/rainy_floor_env_1.png" title="./images/rainy_floor_env_1.png" width=800px></img>
 
 <h3 id="case_chronograf">Case Chronograf</h3>
 
 Please refer to Getting started of [Chronograf site](https://docs.influxdata.com/chronograf/v1.7/) for how to use Chronograf.  
 The following figure is a sample image of a dashboard.
 
-<img src="./images/rainy_chronograf_0.png" title="./images/rainy_chronograf_0.png" width=800px></img>
+<img src="./images/rainy_chronograf_1.png" title="./images/rainy_chronograf_1.png" width=800px></img>
 
 The following figure is a sample dashboard for the following NodeIDs on OPC-UA Public Demo Server of Eclipse Milo.  
 - `1,VendorServerInfo/ProcessCpuLoad`
@@ -553,6 +625,7 @@ Client mosqsub|2095-u1804 received PUBLISH (d0, q0, r0, m0, 'rainy/B0_B4_48_ED_B
 - Only one Bluetooth adapter can be used.
 - Only a few CC2650 (Bluetooth devices) can be used at the same time. (Restriction of Bluetooth chip)
 - When the connection with CC2650 is lost, it may not recover automatically.
+- This tool uses Pi4J for PPD42NS, so PPD42NS can only be used with Raspberry Pi series (arm). Therefore, the PPD42NS feature of this tool does not work on amd64 Linux machines.
 - Depending on the combination of the number of monitored items of OPC-UA servers and the publishing interval, the load on InfluxDB may become too large.
 
 <h2 id="bundle_list">Bundle list</h2>
@@ -561,9 +634,10 @@ The following bundles I created follow the MIT license.
 - [bluetooth-scanner 0.1.1](https://github.com/s5uishida/bluetooth-scanner)
 - [cc2650-driver 0.1.0](https://github.com/s5uishida/cc2650-driver)
 - [mh-z19b-driver 0.1.1](https://github.com/s5uishida/mh-z19b-driver)
-- [rainy-activator 0.1.3](https://github.com/s5uishida/rainy-activator)
+- [ppd42ns-driver 0.1.1](https://github.com/s5uishida/ppd42ns-driver)
+- [rainy-activator 0.1.6](https://github.com/s5uishida/rainy-activator)
 - [rainy-opcua 0.1.4](https://github.com/s5uishida/rainy-opcua)
-- [rainy 0.1.7](https://github.com/s5uishida/rainy)
+- [rainy 0.1.10](https://github.com/s5uishida/rainy)
 
 Please check each license for the following bundles used in addition to these.
 - [SLF4J 1.7.26](https://www.slf4j.org/)
@@ -590,20 +664,21 @@ Please check each license for the following bundles used in addition to these.
 - [JavaBeans Activation Framework (JAF) 1.2.0](https://mvnrepository.com/artifact/com.sun.activation/javax.activation/1.2.0)
 - [strict-machine-osgi 0.1](https://github.com/s5uishida/strict-machine-osgi)
 - [netty-channel-fsm-osgi 0.3](https://github.com/s5uishida/netty-channel-fsm-osgi)
-- [bsd-parser-core-osgi 0.3.2](https://github.com/s5uishida/bsd-parser-core-osgi)
-- [bsd-parser-gson-osgi 0.3.2](https://github.com/s5uishida/bsd-parser-gson-osgi)
-- [stack-core-osgi 0.3.2](https://github.com/s5uishida/stack-core-osgi)
-- [stack-client-osgi 0.3.2](https://github.com/s5uishida/stack-client-osgi)
-- [sdk-core-osgi 0.3.2](https://github.com/s5uishida/sdk-core-osgi)
-- [sdk-client-osgi 0.3.2](https://github.com/s5uishida/sdk-client-osgi)
+- [bsd-parser-core 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/bsd-parser-core/0.3.3)
+- [bsd-parser-gson 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/bsd-parser-gson/0.3.3)
+- [stack-core 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/stack-core/0.3.3)
+- [stack-client 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/stack-client/0.3.3)
+- [sdk-core 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/sdk-core/0.3.3)
+- [sdk-client 0.3.3](https://mvnrepository.com/artifact/org.eclipse.milo/sdk-client/0.3.3)
 - [Gson 2.8.5](https://mvnrepository.com/artifact/com.google.code.gson/gson/2.8.5)
 - [Bouncy Castle PKIX, CMS, EAC, TSP, PKCS, OCSP, CMP, and CRMF APIs 1.62](https://www.bouncycastle.org/download/bcpkix-jdk15on-162.jar)
 - [Bouncy Castle Provider 1.62](https://www.bouncycastle.org/download/bcprov-jdk15on-162.jar)
 - [Guava: Google Core Libraries for Java 26.0](https://repo1.maven.org/maven2/com/google/guava/guava/26.0-jre/guava-26.0-jre.jar)
+- [Pi4J 1.2 (pi4j-core.jar)](https://pi4j.com/download/pi4j-1.2.zip)
 
 I would like to thank the authors of these very useful codes, and all the contributors.
 
 <h2 id="ps">P.S.</h2>
 
-With Raspberry Pi 4B (4GB memory model), InfluxDB and Grafana may be able to run on one with rainy.
-In this case, it is not necessary to prepare the other machine for InfluxDB and Grafana, and I hope that one RP4 can perform from sensor data collection to visualization.
+If Raspberry Pi 4B (4GB memory model), InfluxDB and Grafana may be able to run together with rainy in enough resources.
+In this case, from sensor data collection to monitoring, it may be possible to run with one RP4.
